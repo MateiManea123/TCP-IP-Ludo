@@ -65,7 +65,6 @@ int no_valid_moves(int dice_roll)
             if (new_pos > last_positions[current_client]) 
             {
                 int winning_pos = new_pos - last_positions[current_client];
-                cout<<"winning_position_pawns[current_client][winning_pos] : "<< winning_position_pawns[current_client][winning_pos]<<endl;
                 if (winning_pos <= 4 && winning_position_pawns[current_client][winning_pos] == -1) {
                     return 0; 
                 }
@@ -81,7 +80,7 @@ void sendClient(int fd, const char *message)
 {
     
     if (write(fd, message, strlen(message)) < 0) {
-        perror("[server] Eroare la trimiterea mesajului către client.");
+        perror("[server] Error sending message to client.");
     }
     
 }
@@ -91,7 +90,7 @@ bool readClient(int fd)
     memset(buffer,0,sizeof(buffer));
     if (read(fd, buffer, sizeof(buffer)) < 0)
     {
-        perror("[server] Eroare la trimiterea mesajului către client.");
+        perror("[server] Error reading message from client.");
         return false;
     }
 
@@ -122,35 +121,40 @@ bool handle_command(int fd, char* buffer)
     if(!game_started && !strcmp(buffer,"start"))
     {
         game_started = true;
-        std::cout<<"Game Started"<<std::endl;
-        player_pawns[0][0] = 101;
-        player_pawns[0][1] = 102;
-        player_pawns[0][2] = 103;
-        player_pawns[0][3] = 40;
-        winning_position_pawns[0][1] = 0;
-        winning_position_pawns[0][2] = 1;
-        winning_position_pawns[0][3] = 2;
-        cout<<"winning poses : \n";
-            cout<<winning_position_pawns[current_client][4]<<"\n";
+        for(int i = 0 ; i< 4;i++)
+            for(int j = 0;j<4;j++)
+            {
+                player_pawns[i][j] = -1;
+                winning_position_pawns[i][j+1] = -1;
+            }
+                
+        // std::cout<<"Game Started"<<std::endl;
+        // player_pawns[0][0] = 101;
+        // player_pawns[0][1] = 102;
+        // player_pawns[0][2] = 103;
+        // player_pawns[0][3] = 40;
+        // winning_position_pawns[0][1] = 0;
+        // winning_position_pawns[0][2] = 1;
+        // winning_position_pawns[0][3] = 2;
+        // cout<<"winning poses : \n";
+        //     cout<<winning_position_pawns[current_client][4]<<"\n";
         unknown_command = false;
     }
     if(!strcmp(buffer,"roll") and fd == client_fds[current_client])
     {
         unknown_command = false;
         srand(time(0));
-        //dice_roll = (rand() % 6) + 1;
-        dice_roll = 4;
+        dice_roll = (rand() % 6) + 1;
         if(dice_roll==6)
             repeat = 1;
-        // cout<<"!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! NO_VALID MOVES : "<<no_valid_moves(dice_roll)<<" DICE ROLL : "<<dice_roll<<endl;
+        
         if(no_valid_moves(dice_roll) == 1)
         {
             move_to_next = 1;
         }
-        cout<<"!!!!!!!!!!!!!!!!!!!!!!!!!!!!! MOVE TO NEXT : "<<move_to_next<<endl;
+       
 
         current_dice_roll = dice_roll;
-        cout<<"current_dice_roll : "<<current_dice_roll<<endl;
         std::cout<<"Rolled"<<std::endl;
         
     }
@@ -235,7 +239,7 @@ char* print_game_state(int turn) {
                 output << "| Pawn " << j + 1 << ": "<< "On WINNING Position " << setw(12) << player_pawns[i][j]%10 << " |\n";
             }
             else
-                output<< "| Pawn " << j + 1 << ": "<< "On Position " << setw(12) << player_pawns[i][j] << " |\n";
+                output<< "| Pawn " << j + 1 << ": "<< "On Position " << setw(12) << player_pawns[i][j]%41 << " |\n";
         }
 
         output << "+------------------------------------+\n";
@@ -243,20 +247,20 @@ char* print_game_state(int turn) {
 
     output << separator << "\n";
 
-    // Obținem textul generat ca string
+    
     string result = output.str();
 
-    // Alocăm un buffer pentru a stoca textul
+    
     char* buffer = (char*)malloc(result.size() + 1);
     if (!buffer) {
-        cerr << "Eroare la alocarea memoriei!\n";
+        cerr << "Error at memory allocation!\n";
         return nullptr;
     }
 
-    // Copiem textul în buffer
+    
     strcpy(buffer, result.c_str());
 
-    return buffer; // Returnăm pointerul către buffer
+    return buffer; 
 }
 
 int main() {
@@ -265,38 +269,38 @@ int main() {
     socklen_t client_len;
     fd_set readfds;
 
-    // Creare socket server
+
     if ((server_fd = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
-        perror("[server] Eroare la creare socket.");
+        perror("[server] Error at creating socket.");
         exit(1);
     }
     int opt = 1;
     if (setsockopt(server_fd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt)) < 0) {
-        perror("[server] Eroare la setsockopt.");
+        perror("[server] Error at setsockopt.");
         close(server_fd);
         exit(1);
     }
-    // Configurare adresa server
+    
     memset(&server_addr, 0, sizeof(server_addr));
     server_addr.sin_family = AF_INET;
     server_addr.sin_addr.s_addr = INADDR_ANY;
     server_addr.sin_port = htons(PORT);
 
-    // Bind socket
+    
     if (bind(server_fd, (struct sockaddr *)&server_addr, sizeof(server_addr)) < 0) {
-        perror("[server] Eroare la bind.");
+        perror("[server] Error at bind.");
         close(server_fd);
         exit(1);
     }
 
-    // Ascultare conexiuni
+
     if (listen(server_fd, MAX_CLIENTS) < 0) {
-        perror("[server] Eroare la listen.");
+        perror("[server] Error at listen.");
         close(server_fd);
         exit(1);
     }
 
-    std::cout << "[server] Server pornit. Ascultă pe portul " << PORT << "...\n";
+    std::cout << "[server] Server started. Listening to port : " << PORT << "...\n";
     int old_current_client = 0;
     while (true) {
         bool work_message_received = false;
@@ -313,22 +317,22 @@ int main() {
         }
 
         if (select(max_fd + 1, &readfds, NULL, NULL, NULL) < 0) {
-            perror("[server] Eroare la select.");
+            perror("[server] Error at select.");
             continue;
         }
 
         if (FD_ISSET(server_fd, &readfds)) {
             client_len = sizeof(client_addr);
             if ((client_fd = accept(server_fd, (struct sockaddr *)&client_addr, &client_len)) < 0) {
-                perror("[server] Eroare la accept.");
+                perror("[server] Error at accept.");
                 continue;
             }
 
             if (client_count < MAX_CLIENTS) {
                 client_fds[client_count++] = client_fd;
-                std::cout << "[server] Client conectat. IP: " << inet_ntoa(client_addr.sin_addr) << "\n";
+                std::cout << "[server] Client connected. IP: " << inet_ntoa(client_addr.sin_addr) << "\n";
 
-                const char *welcome_message = "Bun venit pe server! Așteptați mesaje de la server...\n";
+                const char *welcome_message = "Welcome to Nu te supara frate! Wait for messages from the server...\n";
                 sendClient(client_fd, welcome_message);
                 if(client_count == 1)
                 {
@@ -339,7 +343,7 @@ int main() {
                     sendClient(client_fds[0],"start");
                 }
             } else {
-                const char *full_message = "Serverul este plin. Reîncercați mai târziu.\n";
+                const char *full_message = "The server is full. Try again later.\n";
                 sendClient(client_fd, full_message);
                 close(client_fd);
             }
@@ -375,7 +379,6 @@ int main() {
             }
         }
         
-        // Trimitem mesaje tuturor clienților
         
             
         if (work_message_received && game_started) 
@@ -397,10 +400,8 @@ int main() {
             }
             for (int i = 0; i < client_count; i++) 
             {
-                std::cout<<"notified[i] "<<notified[i]<<std::endl;
                 if(notified[i]==2 and i==current_client)
                 { 
-                        std::cout<<"dice_roll: "<<dice_roll<<std::endl;    
                         sendClient(client_fds[i],"choose");
                         notified[i]++;
                         

@@ -16,30 +16,28 @@ int main(int argc, char *argv[]) {
     char buffer[BUFFER_SIZE];
 
     if (argc != 3) {
-        std::cerr << "Sintaxă: " << argv[0] << " <adresa_server> <port>\n";
+        std::cerr << "Syntax: " << argv[0] << " <server_adress> <port>\n";
         exit(1);
     }
 
-    // Creare socket
+    
     if ((sd = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
-        perror("[client] Eroare la creare socket.");
+        perror("[client] Error when creating socket.");
         exit(1);
     }
 
-    // Configurare adresa server
     memset(&server_addr, 0, sizeof(server_addr));
     server_addr.sin_family = AF_INET;
     server_addr.sin_addr.s_addr = inet_addr(argv[1]);
     server_addr.sin_port = htons(atoi(argv[2]));
 
-    // Conectare la server
     if (connect(sd, (struct sockaddr *)&server_addr, sizeof(server_addr)) < 0) {
-        perror("[client] Eroare la conectare.");
+        perror("[client] Error when trying to connect.");
         close(sd);
         exit(1);
     }
 
-    std::cout << "[client] Conectat la server. Aștept mesaje...\n";
+    std::cout << "[client] Connected to the server. Waiting for messages...\n";
 
     while (true) {
         
@@ -48,12 +46,12 @@ int main(int argc, char *argv[]) {
         int bytes = read(sd, buffer, sizeof(buffer) - 1);
 
         if (bytes <= 0) {
-            std::cerr << "[client] Conexiunea la server a fost pierdută.\n";
+            std::cerr << "[client] The connexion to the server has been lost.\n";
             break;
         }
-        std::cout << "[client] Mesaj primit: " << buffer << "\n";
+        std::cout << "[client] Message from server: " << buffer << "\n";
         if (!strcmp(buffer, "quit")) {
-            printf("[client] Deconectare...\n");
+            printf("[client] Disconnecting...\n");
             break;
         }
         if(!strcmp(buffer, "start") or !strcmp(buffer, "roll") or !strcmp(buffer,"choose")or !strcmp(buffer,"unknown"))
@@ -71,7 +69,7 @@ int main(int argc, char *argv[]) {
 
             read(0, buffer_send, sizeof(buffer));
 
-            cout<<"[client] Mesaj trimis la server: "<< buffer_send<<"\n";
+            cout<<"[client] Message sent to server: "<< buffer_send<<"\n";
 
             buffer_send[strcspn(buffer_send, "\n")] = 0;
 
