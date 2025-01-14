@@ -17,10 +17,12 @@ using namespace std;
 int client_fds[MAX_CLIENTS]; // Array pentru socket-urile clienților
 int client_count = 0;
 int dice_roll = -1;
-int current_client = 0;
+int current_client = 0; //primul jucator e 0
 int current_dice_roll  = 0;
-vector<vector<int>> player_pawns(4,vector<int>(4,0));
-vector<int> starting_positions = {0, 10, 20, 30 };
+vector<vector<int>> player_pawns(4,vector<int>(4,-1)); //primul pion al primului jucator e player_pawns[0][0] = -1;
+vector<int> starting_positions = {1, 11, 21, 31 };
+vector<int> last_positions = {40, 50, 60, 70 };
+vector<vector<int>> winning_position_pawns(4,vector<int>(4,-1));
 bool game_started = false;
 void handle_command(int fd, char* buffer);
 int notified[MAX_CLIENTS] = {0};
@@ -28,11 +30,14 @@ int moved_pawn = 0;
 int repeat = 0;
 int move_to_next = 0;
 int ejected_pawn_error = 0 ;
-int check_player_pawns()
+int moving_pawn_error = 0;
+int ate_pawn  = -1;
+
+int no_valid_moves()
 {
     for (int i =0;i<4;i++)
     {
-        if(player_pawns[current_client][i]!=0)
+        if((player_pawns[current_client][i]!=-1 and player_pawns[current_client][i]<100) or winning_position_pawns[current_client][i]!=-1)
             return 0;
     }
     return 1;
@@ -70,11 +75,12 @@ void handle_command(int fd, char* buffer)
     }
     if(!strcmp(buffer,"roll") and fd == client_fds[current_client])
     {
-        
+        srand(time(0));
         dice_roll = (rand() % 6) + 1;
         if(dice_roll==6)
             repeat = 1;
-         if(check_player_pawns() == 1  and dice_roll!=6)
+        cout<<"!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! NO_VALID MOVES : "<<no_valid_moves<<endl;
+        if(no_valid_moves() == 1  and dice_roll!=6)
         {
             move_to_next = 1;
         }
@@ -84,16 +90,46 @@ void handle_command(int fd, char* buffer)
     }
     if((!strcmp(buffer,"1")||!strcmp(buffer,"2")||!strcmp(buffer,"3")||!strcmp(buffer,"4")) and fd == client_fds[current_client])
     {
+        ate_pawn = -1;
         moved_pawn = atoi(buffer);
-        if(current_dice_roll!=6 and player_pawns[current_client][moved_pawn-1]==0)
+        if((current_dice_roll!=6 and player_pawns[current_client][moved_pawn-1]==-1))
         {
             ejected_pawn_error = 1;
         }
         else
         {
+            
+            if(player_pawns[current_client][moved_pawn-1] == -1)
+            {
                 player_pawns[current_client][moved_pawn-1] = starting_positions[current_client];
+            }
+            else
                 player_pawns[current_client][moved_pawn-1] +=current_dice_roll;
-
+            if(player_pawns[current_client][moved_pawn-1] > last_positions[current_client])
+            {
+                if(player_pawns[current_client][moved_pawn-1] - last_positions[current_client] > 4 or winning_position_pawns[current_client][moved_pawn-1]!=-1)
+                {
+                    moving_pawn_error = 1;
+                }
+                else 
+                {
+                    winning_position_pawns[current_client][moved_pawn-1] = player_pawns[current_client][moved_pawn-1] - last_positions[current_client];
+                    player_pawns[current_client][moved_pawn-1] = 100*(current_client+1)+winning_position_pawns[current_client][moved_pawn-1];
+                }
+            }
+            for(int i = 0; i < client_count;i++)
+            {
+                for(int j = 0;j<4;j++)
+                {
+                    if((i!= current_client) and player_pawns[current_client][moved_pawn -1 ] == player_pawns[i][j])
+                    {
+                        player_pawns[i][j] = -1;
+                        ate_pawn = i;
+                    }
+                        
+                }
+            }
+            
             current_dice_roll = 0;
             std::cout<<"Moved Pawn"<<std::endl;
         }
@@ -105,7 +141,7 @@ void handle_command(int fd, char* buffer)
 char* print_game_state(int turn) {
     ostringstream output;
 
-    const string separator = "========================================";
+    const string separator = "\n========================================";
 
     output << separator << "\n";
     output << "            Don't Worry Brother!          \n";
@@ -116,15 +152,17 @@ char* print_game_state(int turn) {
 
     for (int i = 0; i < client_count; i++) {
         output << "+------------------------------------+\n";
-        output << "| Player " << i + 1 << " Pawns:" << setw(26) << "|\n";
+        output << "| Player " << i + 1 << " Pawns:" << setw(22) << "|\n";
         output << "+------------------------------------+\n";
 
         for (int j = 0; j < 4; j++) {
-            if (player_pawns[i][j] == 0) {
+            if (player_pawns[i][j] == -1) {
                 output << "| Pawn " << j + 1 << ": " << "In Base" << setw(22) << "|\n";
-            } else {
-                output << "| Pawn " << j + 1 << ": "<< "On Position " << setw(12) << player_pawns[i][j] << " |\n";
+            } else if(player_pawns[i][j]>100){
+                output << "| Pawn " << j + 1 << ": "<< "On WINNING Position " << setw(12) << winning_position_pawns[i][j] << " |\n";
             }
+            else
+                output<< "| Pawn " << j + 1 << ": "<< "On Position " << setw(12) << player_pawns[i][j] << " |\n";
         }
 
         output << "+------------------------------------+\n";
@@ -159,7 +197,12 @@ int main() {
         perror("[server] Eroare la creare socket.");
         exit(1);
     }
-
+    int opt = 1;
+    if (setsockopt(server_fd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt)) < 0) {
+        perror("[server] Eroare la setsockopt.");
+        close(server_fd);
+        exit(1);
+    }
     // Configurare adresa server
     memset(&server_addr, 0, sizeof(server_addr));
     server_addr.sin_family = AF_INET;
@@ -301,7 +344,7 @@ int main() {
             
             if(moved_pawn!=0)
             {
-                if(ejected_pawn_error == 0)
+                if(ejected_pawn_error == 0 and moving_pawn_error == 0)
                 {
                     for (int i = 0; i < client_count; i++) 
                     {
@@ -309,17 +352,36 @@ int main() {
                         char temp2[1000] = {0};
                         if (i == current_client) 
                         {
-                            strcat(temp, game_state);
-                            sprintf(temp2, "You moved pawn : %d  \n", moved_pawn);
-                            strcat(temp,temp2); 
+                            if(ate_pawn!=-1)
+                            {
+                                strcat(temp, game_state);
+                                sprintf(temp2, "You moved pawn : %d , and ate %d's pawn\n", moved_pawn, ate_pawn);
+                                strcat(temp,temp2);
+                                
+                            }
+                            else
+                            {
+                                strcat(temp, game_state);
+                                sprintf(temp2, "You moved pawn : %d  \n", moved_pawn);
+                                strcat(temp,temp2); 
+                            }
                             sendClient(client_fds[i], temp);
                             notified[i] = 3;
                         } 
                         else
                         { 
+                            if(ate_pawn!=-1)
+                            {
+                                strcat(temp, game_state);
+                                sprintf(temp2, "Client %d moved pawn: %d , and ate %d's pawn\n", current_client, moved_pawn,ate_pawn);
+                                strcat(temp, temp2);
+                            }
+                            else
+                            {
                                 strcat(temp, game_state);
                                 sprintf(temp2, "Client %d moved pawn: %d \n", current_client, moved_pawn);
                                 strcat(temp, temp2);
+                            }
                                 sendClient(client_fds[i], temp);
                         }
                     }
@@ -335,6 +397,13 @@ int main() {
                         moved_pawn = 0;
                         memset(notified,0,sizeof(notified));
                     }
+                }
+                else if(moving_pawn_error!=0)
+                {
+                    sendClient(client_fds[current_client], "You can't move the pawn because the position is occupied, or you rolled to much!\n Move another pawn!");
+                    moving_pawn_error = 0;
+                    notified[current_client] = 2;
+                    moved_pawn = 0; 
                 }
                 else
                 {

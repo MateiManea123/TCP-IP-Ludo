@@ -8,7 +8,7 @@
 #include <iostream>
 #include <cstdlib>
 using namespace std;
-#define BUFFER_SIZE 1024
+#define BUFFER_SIZE 2048
 
 int main(int argc, char *argv[]) {
     int sd;
@@ -55,7 +55,7 @@ int main(int argc, char *argv[]) {
             printf("[client] Deconectare...\n");
             break;
         }
-        if(!strcmp(buffer, "start") or !strcmp(buffer, "roll") or!strcmp(buffer,"choose"))
+        if(!strcmp(buffer, "start") or !strcmp(buffer, "roll") or !strcmp(buffer,"choose"))
         {
             if(!strcmp(buffer, "start"))
                 cout<<"[client] You can start the game when you want! [start]"<<endl;
@@ -63,7 +63,6 @@ int main(int argc, char *argv[]) {
                 cout<<"[client] Choose a pawn to move! [1,2,3,4]"<<endl;
             if(!strcmp(buffer, "roll"))
                 cout<<"[client] Roll the dice! [roll]"<<endl;
-
             char buffer_send[BUFFER_SIZE] = {0};
 
             read(0, buffer_send, sizeof(buffer));
