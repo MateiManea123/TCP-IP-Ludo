@@ -24,7 +24,7 @@ vector<int> starting_positions = {1, 11, 21, 31 };
 vector<int> last_positions = {40, 50, 60, 70 };
 vector<vector<int>> winning_position_pawns(4,vector<int>(5,-1));
 bool game_started = false;
-void handle_command(int fd, char* buffer);
+bool handle_command(int fd, char* buffer);
 int notified[MAX_CLIENTS] = {0};
 int moved_pawn = 0;
 int repeat = 0;
@@ -33,6 +33,9 @@ int ejected_pawn_error = 0 ;
 int moving_pawn_error = 0;
 int ate_pawn  = -1;
 int victory = -1;
+bool unknown_command = false;
+bool quitting = false;
+bool game_won = false;
 int check_victory()
 {
     for(int i = 1; i<=4;i++)
@@ -82,23 +85,39 @@ void sendClient(int fd, const char *message)
     }
     
 }
-void readClient(int fd)
+bool readClient(int fd)
 {
     char buffer[BUFFER_SIZE] = {0};
     memset(buffer,0,sizeof(buffer));
-    if (read(fd, buffer, sizeof(buffer)) < 0) 
+    if (read(fd, buffer, sizeof(buffer)) < 0)
     {
         perror("[server] Eroare la trimiterea mesajului către client.");
+        return false;
     }
-    
+
     else
     {
-        handle_command(fd,buffer);
         std::cout<<buffer<<"\n";
+        return handle_command(fd,buffer);
     }
 }
-void handle_command(int fd, char* buffer)
+bool handle_command(int fd, char* buffer)
 {
+    if (buffer[0] == 0)
+    {
+        std::cout<<"handle_command: empty buffer\n";
+        return false;
+    }
+    unknown_command = true;
+    if(!strcmp(buffer,"OK"))
+    {
+        unknown_command = false;
+    }
+    if(!strcmp(buffer,"quit"))
+    {
+        quitting = true;
+        unknown_command = false;
+    }
     std::cout<<"handle_command:"<<buffer<<std::endl;
     if(!game_started && !strcmp(buffer,"start"))
     {
@@ -113,11 +132,14 @@ void handle_command(int fd, char* buffer)
         winning_position_pawns[0][3] = 2;
         cout<<"winning poses : \n";
             cout<<winning_position_pawns[current_client][4]<<"\n";
+        unknown_command = false;
     }
     if(!strcmp(buffer,"roll") and fd == client_fds[current_client])
     {
+        unknown_command = false;
         srand(time(0));
-        dice_roll = (rand() % 6) + 1;
+        //dice_roll = (rand() % 6) + 1;
+        dice_roll = 4;
         if(dice_roll==6)
             repeat = 1;
         // cout<<"!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! NO_VALID MOVES : "<<no_valid_moves(dice_roll)<<" DICE ROLL : "<<dice_roll<<endl;
@@ -130,9 +152,11 @@ void handle_command(int fd, char* buffer)
         current_dice_roll = dice_roll;
         cout<<"current_dice_roll : "<<current_dice_roll<<endl;
         std::cout<<"Rolled"<<std::endl;
+        
     }
     if((!strcmp(buffer,"1")||!strcmp(buffer,"2")||!strcmp(buffer,"3")||!strcmp(buffer,"4")) and fd == client_fds[current_client])
     {
+        unknown_command = false;
         ate_pawn = -1;
         moved_pawn = atoi(buffer);
         if((current_dice_roll!=6 and player_pawns[current_client][moved_pawn-1]==-1))
@@ -184,6 +208,7 @@ void handle_command(int fd, char* buffer)
 
         
     }
+    return true;
 }
 
 char* print_game_state(int turn) {
@@ -272,8 +297,9 @@ int main() {
     }
 
     std::cout << "[server] Server pornit. Ascultă pe portul " << PORT << "...\n";
-    
+    int old_current_client = 0;
     while (true) {
+        bool work_message_received = false;
         dice_roll  = -1;
         FD_ZERO(&readfds);
         FD_SET(server_fd, &readfds);
@@ -304,6 +330,14 @@ int main() {
 
                 const char *welcome_message = "Bun venit pe server! Așteptați mesaje de la server...\n";
                 sendClient(client_fd, welcome_message);
+                if(client_count == 1)
+                {
+                    sendClient(client_fds[0], "Wait for at least one more person to join!");
+                }
+                if (client_count == 2)
+                {
+                    sendClient(client_fds[0],"start");
+                }
             } else {
                 const char *full_message = "Serverul este plin. Reîncercați mai târziu.\n";
                 sendClient(client_fd, full_message);
@@ -311,26 +345,56 @@ int main() {
             }
         }
         else{
-            for (int i = 0; i < client_count; i++) 
+            unknown_command = false;
+            for (int i = 0; i < client_count; i++)
             {
                 if (FD_ISSET(client_fds[i], &readfds))
-                    readClient(client_fds[i]); 
-            }
-        }
+                {
+                    if (i == current_client)
+                    {
+                        work_message_received = true;
+                    }
+                    if (readClient(client_fds[i]) == false)
+                    {
+                        work_message_received = true;
+                        quitting = true;
+                        break;
+                    }
 
-        // Trimitem mesaje tuturor clienților
-        if(!game_started)
-        {
-            for (int i = 0; i < client_count; i++) 
-            {
-                if (FD_ISSET(client_fds[i], &readfds))
-                    sendClient(client_fds[i],i==0?"start":"Game not started");
+                }
             }
-            sleep(2); // Pauză pentru demonstrație
+            if(old_current_client!=current_client)
+                work_message_received = true;
+            if(game_won)
+            {
+                if (client_count == 2)
+                {
+                    sendClient(client_fds[0],"start");
+                    game_won =false;
+                }
+            }
         }
+        
+        // Trimitem mesaje tuturor clienților
+        
             
-        else 
+        if (work_message_received && game_started) 
         {
+            old_current_client = current_client;
+            if (unknown_command)
+            {
+                sendClient(client_fds[current_client], "unknown");
+
+                continue;
+            }
+            else if (quitting)
+            {
+                for (int i = 0; i < client_count; i++)
+                {
+                    sendClient(client_fds[i], "quit");
+                }
+                break;
+            }
             for (int i = 0; i < client_count; i++) 
             {
                 std::cout<<"notified[i] "<<notified[i]<<std::endl;
@@ -415,7 +479,7 @@ int main() {
                             }
                             sendClient(client_fds[i], temp);
                             game_started = false;
-                            victory = 0;
+                            game_won = true;
                         }
                         else
                         {
@@ -457,6 +521,7 @@ int main() {
                         }
                         
                     }
+                    victory = 0;
                     if(repeat == 1)
                     {
                         moved_pawn = 0;

@@ -42,7 +42,7 @@ int main(int argc, char *argv[]) {
     std::cout << "[client] Conectat la server. Aștept mesaje...\n";
 
     while (true) {
-
+        
         memset(buffer, 0, sizeof(buffer));
 
         int bytes = read(sd, buffer, sizeof(buffer) - 1);
@@ -51,11 +51,12 @@ int main(int argc, char *argv[]) {
             std::cerr << "[client] Conexiunea la server a fost pierdută.\n";
             break;
         }
+        std::cout << "[client] Mesaj primit: " << buffer << "\n";
         if (!strcmp(buffer, "quit")) {
             printf("[client] Deconectare...\n");
             break;
         }
-        if(!strcmp(buffer, "start") or !strcmp(buffer, "roll") or !strcmp(buffer,"choose"))
+        if(!strcmp(buffer, "start") or !strcmp(buffer, "roll") or !strcmp(buffer,"choose")or !strcmp(buffer,"unknown"))
         {
             if(!strcmp(buffer, "start"))
                 cout<<"[client] You can start the game when you want! [start]"<<endl;
@@ -63,6 +64,9 @@ int main(int argc, char *argv[]) {
                 cout<<"[client] Choose a pawn to move! [1,2,3,4]"<<endl;
             if(!strcmp(buffer, "roll"))
                 cout<<"[client] Roll the dice! [roll]"<<endl;
+            if(!strcmp(buffer, "unknown"))
+                cout<<"[client] unknown command"<<endl;
+
             char buffer_send[BUFFER_SIZE] = {0};
 
             read(0, buffer_send, sizeof(buffer));
@@ -71,18 +75,16 @@ int main(int argc, char *argv[]) {
 
             buffer_send[strcspn(buffer_send, "\n")] = 0;
 
-            write(sd, buffer_send, sizeof(buffer_send));
-            
+            write(sd, buffer_send, strlen(buffer_send));
+
         }
         else
         {
             char buffer_send[bytes] = "OK";
-            
-            std::cout << "[client] Mesaj primit: " << buffer << "\n";
 
             write(sd, buffer_send, sizeof(buffer_send));
         }
-        
+
     }
 
     close(sd);
